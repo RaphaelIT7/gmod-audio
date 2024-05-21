@@ -43,12 +43,12 @@ CreateWorkspace({name = "gmod_audio", abi_compatible = false})
 		filter("system:windows")
 			files({"source/win32/*.cpp", "source/win32/*.hpp"})
 
-		filter("system:windows", "platforms:x86_64")
-			libdirs(current_dir .. "/libs/win64")
-			links({"bass.lib"})
-
 		filter("system:windows", "platforms:x86")
 			libdirs(current_dir .. "/libs/win32")
+			links({"bass.lib"})
+
+		filter("system:windows", "platforms:x86_64")
+			libdirs(current_dir .. "/libs/win64")
 			links({"bass.lib"})
 
 		filter({"system:linux", "platforms:x86_64"})

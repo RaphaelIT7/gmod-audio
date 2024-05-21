@@ -2,7 +2,7 @@
 #include "cgmod_audio.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <tier3.h>
+#include <tier2/tier2.h>
 #include <filesystem.h>
 
 const char* BassErrorToString(int errorCode) {
@@ -155,7 +155,6 @@ bool CGMod_Audio::Init(CreateInterfaceFn interfaceFactory)
 {
 	ConnectTier1Libraries( &interfaceFactory, 1 );
 	ConnectTier2Libraries( &interfaceFactory, 1 );
-	ConnectTier3Libraries( &interfaceFactory, 1 );
 
 	BASS_SetConfig(BASS_CONFIG_UPDATEPERIOD, 36);
 
