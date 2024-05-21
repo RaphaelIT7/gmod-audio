@@ -25,7 +25,6 @@ CreateWorkspace({name = "gmod_audio", abi_compatible = false})
 		IncludeHelpersExtended()
 		--IncludeLuaShared()
 		--IncludeSDKEngine()
-		IncludeSDKCommon()
 		--IncludeBootil()
 		IncludeSDKCommon()
 		IncludeSDKTier0()
@@ -39,10 +38,6 @@ CreateWorkspace({name = "gmod_audio", abi_compatible = false})
 		--IncludeSteamAPI()
 		--IncludeDetouring()
 		--IncludeScanning()
-
-		files({
-			[[garrysmod_common\sourcesdk-minimal\public\tier2\tier2.cpp]],
-		})
 
 		targetsuffix("")
 		filter("system:windows")
