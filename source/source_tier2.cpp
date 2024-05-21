@@ -7,6 +7,7 @@
 #include <tier2/tier2.h>
 #include "tier0/dbg.h"
 #include "filesystem.h"
+#include "platform.hpp"
 
 
 //-----------------------------------------------------------------------------
@@ -15,7 +16,9 @@
 // It is hoped that setting this, and using this library will be the common mechanism for
 // allowing link libraries to access tier2 library interfaces
 //-----------------------------------------------------------------------------
+#ifdef ARCHITECTURE_IS_X86
 IFileSystem *g_pFullFileSystem = 0;
+#endif
 
 //-----------------------------------------------------------------------------
 // Call this to connect to all tier 2 libraries.
