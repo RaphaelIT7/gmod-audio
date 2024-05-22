@@ -220,9 +220,7 @@ IBassAudioStream* CGMod_Audio::CreateAudioStream(IAudioStreamEvent* event)
 
 void CGMod_Audio::SetGlobalVolume(float volume)
 {
-	//float modifiedVolume = volume * (dword_9F24 - 0x1C91);
-
-	int intVolume = static_cast<int>(volume);
+	int intVolume = static_cast<int>(volume * 10000);
 
 	BASS_SetConfig(BASS_CONFIG_GVOL_STREAM, intVolume);
 	BASS_SetConfig(BASS_CONFIG_GVOL_MUSIC, intVolume);
@@ -240,56 +238,56 @@ void CGMod_Audio::Update(unsigned int updatePeriod)
 	BASS_Update(updatePeriod);
 }
 
-void CGMod_Audio::SetEar(Vector* earPosition, Vector* earForward, Vector* earUp, Vector* earVelocity)
+void CGMod_Audio::SetEar(Vector* earPosition, Vector* earVelocity, Vector* earFront, Vector* earTop)
 {
 	BASS_3DVECTOR earPos;
 	earPos.x = earPosition->x;
 	earPos.y = earPosition->y;
 	earPos.z = earPosition->z;
 
-	BASS_3DVECTOR earDir;
-	earDir.x = earForward->x;
-	earDir.y = earForward->y;
-	earDir.z = earForward->z;
-
-	BASS_3DVECTOR earUpVec;
-	earUpVec.x = earUp->x;
-	earUpVec.y = earUp->y;
-	earUpVec.z = earUp->z;
-
 	BASS_3DVECTOR earVel;
 	earVel.x = earVelocity->x;
 	earVel.y = earVelocity->y;
 	earVel.z = earVelocity->z;
 
-	BASS_Set3DPosition(&earPos, &earDir, &earUpVec, &earVel);
+	BASS_3DVECTOR earFr;
+	earFr.x = earFront->x;
+	earFr.y = earFront->y;
+	earFr.z = -earFront->z;
+
+	BASS_3DVECTOR earT;
+	earT.x = earTop->x;
+	earT.y = earTop->y;
+	earT.z = -earTop->z;
+
+	BASS_Set3DPosition(&earPos, &earVel, &earFr, &earT);
 	BASS_Set3DFactors(0.0680416, 7.0, 5.2);
 
 	BASS_Apply3D();
 }
 
-DWORD BASSFlagsFromString(const std::string& flagsString)
+DWORD BASSFlagsFromString(const std::string& flagsString, bool* autoplay) // autoplay arg doesn't exist in gmod.
 {
 	DWORD flags = 0;
 	if (flagsString.empty())
 	{
-		//flags |= BASS_STREAM_BLOCK;
+		flags |= BASS_STREAM_BLOCK;
 		return flags;
 	}
 
 	if (flagsString.find("3d") != std::string::npos)
 	{
-		flags |= BASS_MUSIC_3D;
+		flags |= BASS_SAMPLE_3D;
 	}
 
 	if (flagsString.find("mono") != std::string::npos)
 	{
-		flags |= BASS_MUSIC_MONO;
+		flags |= BASS_SAMPLE_MONO;
 	}
 
 	if (flagsString.find("noplay") != std::string::npos)
 	{
-		//flags |= BASS_MUSIC_;
+		autoplay = false;
 	}
 
 	if (flagsString.find("noblock") == std::string::npos)
@@ -308,7 +306,8 @@ IGModAudioChannel* CGMod_Audio::PlayURL(const char* url, const char* flags, int*
 		return NULL;
 	}
 
-	DWORD bassFlags = BASSFlagsFromString(flags);
+	bool autoplay = true;
+	DWORD bassFlags = BASSFlagsFromString(flags, &autoplay);
 	HSTREAM stream = BASS_StreamCreateURL(url, 0, bassFlags, nullptr, nullptr);
 
 	if (stream == 0) {
@@ -316,7 +315,13 @@ IGModAudioChannel* CGMod_Audio::PlayURL(const char* url, const char* flags, int*
 		return NULL;
 	}
 
-	return (IGModAudioChannel*)new CGModAudioChannel(stream, true);
+	if (autoplay && !BASS_ChannelPlay(stream, TRUE)) {
+		*errorCode = BASS_ErrorGetCode();
+		BASS_StreamFree(stream);
+		return NULL;
+	}
+
+	return (IGModAudioChannel*)new CGModAudioChannel(stream, false);
 }
 
 // The original function is too fucked up. https://i.imgur.com/xz5xAIJ.png
@@ -331,7 +336,8 @@ IGModAudioChannel* CGMod_Audio::PlayFile(const char* filePath, const char* flags
 	char fullPath[MAX_PATH];
 	g_pFullFileSystem->RelativePathToFullPath(filePath, "GAME", fullPath, sizeof(fullPath));
 
-	DWORD bassFlags = 0;//BASSFlagsFromString(flags); <- ToDo: Fix it. It's doing some funny stuff
+	bool autoplay = true;
+	DWORD bassFlags = BASSFlagsFromString(flags, &autoplay);
 	HSTREAM stream = BASS_StreamCreateFile(FALSE, fullPath, 0, 0, bassFlags);
 	//delete[] fullPath; // Causes a crash
 
@@ -340,17 +346,25 @@ IGModAudioChannel* CGMod_Audio::PlayFile(const char* filePath, const char* flags
 		return NULL;
 	}
 
-	if (!BASS_ChannelPlay(stream, TRUE)) {
+	if (autoplay && !BASS_ChannelPlay(stream, TRUE)) {
 		*errorCode = BASS_ErrorGetCode();
 		BASS_StreamFree(stream);
 		return NULL;
 	}
 
-	return (IGModAudioChannel*)new CGModAudioChannel(stream, false);
+	return (IGModAudioChannel*)new CGModAudioChannel(stream, true);
 }
 
 EXPOSE_SINGLE_INTERFACE_GLOBALVAR(CGMod_Audio, IGMod_Audio, "IGModAudio001", g_CGMod_Audio);
 
+
+CGModAudioChannel::CGModAudioChannel( DWORD handle, bool isfile )
+{
+	BASS_ChannelSet3DAttributes(handle, BASS_3DMODE_NORMAL, 200, 1000000000, 360, 360, 0);
+	BASS_Apply3D();
+	this->handle = handle;
+	this->isfile = isfile;
+}
 
 void CGModAudioChannel::Destroy()
 {
@@ -401,19 +415,12 @@ void CGModAudioChannel::SetPlaybackRate(float speed)
 	BASS_ChannelSetAttribute(handle, BASS_ATTRIB_FREQ, speed);
 }
 
-float freq_default = 44100;
 float CGModAudioChannel::GetPlaybackRate()
 {
-	//int playbackRate = reinterpret_cast<int(__thiscall*)(void*)>(vtable[100])(thisPtr);
-	int playbackRate = freq_default;
-	//if (playbackRate <= 0) {
-	//	playbackRate = freq_default;
-	//}
-
-	float currentPlaybackRate = 0.0f;
+	float currentPlaybackRate = 0;
 	BASS_ChannelGetAttribute(handle, BASS_ATTRIB_FREQ, &currentPlaybackRate);
 
-	return currentPlaybackRate / static_cast<float>(playbackRate);
+	return currentPlaybackRate;
 }
 
 void CGModAudioChannel::SetPos(Vector* earPosition, Vector* earForward, Vector* earUp)
@@ -424,16 +431,22 @@ void CGModAudioChannel::SetPos(Vector* earPosition, Vector* earForward, Vector* 
 	earPos.z = earPosition->z;
 
 	BASS_3DVECTOR earDir;
-	earDir.x = earForward->x;
-	earDir.y = earForward->y;
-	earDir.z = earForward->z;
+	if (earForward)
+	{
+		earDir.x = earForward->x;
+		earDir.y = earForward->y;
+		earDir.z = earForward->z;
+	}
 
 	BASS_3DVECTOR earUpVec;
-	earUpVec.x = earUp->x;
-	earUpVec.y = earUp->y;
-	earUpVec.z = earUp->z;
+	if (earUp)
+	{
+		earUpVec.x = earUp->x;
+		earUpVec.y = earUp->y;
+		earUpVec.z = earUp->z;
+	}
 
-	BASS_ChannelSet3DPosition(handle, &earPos, &earDir, &earUpVec);
+	BASS_ChannelSet3DPosition(handle, &earPos, earForward ? &earDir : NULL, earUp ? &earUpVec : NULL);
 	BASS_Apply3D();
 }
 
@@ -510,7 +523,7 @@ bool CGModAudioChannel::IsLooping()
 
 bool CGModAudioChannel::IsOnline()
 {
-	return online;
+	return !isfile;
 }
 
 bool CGModAudioChannel::Is3D()
@@ -635,4 +648,16 @@ bool CGModAudioChannel::Get3DEnabled()
 void CGModAudioChannel::Restart()
 {
 	BASS_ChannelPlay(handle, true);
+}
+
+double CGModAudioChannel::GetBufferedTime()
+{
+	if (isfile)
+	{
+		return GetLength();
+	} else {
+		float bufferedTime = 0.0f;
+		BASS_ChannelGetAttribute(handle, BASS_ATTRIB_BUFFER, &bufferedTime);
+		return bufferedTime;
+	}
 }

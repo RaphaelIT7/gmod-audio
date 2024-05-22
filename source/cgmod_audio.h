@@ -38,10 +38,13 @@ public:
 	virtual float GetVolume();
 	virtual void SetPlaybackRate(float);
 	virtual float GetPlaybackRate();
-	virtual void SetPos( Vector*, Vector*, Vector* );
+	virtual void SetPos( Vector*, Vector* = NULL, Vector* = NULL );
 	virtual void GetPos( Vector*, Vector*, Vector* );
 	virtual void SetTime( double, bool );
 	virtual double GetTime();
+#ifdef _WIN32
+	virtual double GetBufferedTime();
+#endif
 	virtual void Set3DFadeDistance( float, float );
 	virtual void Get3DFadeDistance( float*, float* );
 	virtual void Set3DCone( int, int, float );
@@ -67,15 +70,11 @@ public:
 	virtual bool Get3DEnabled();
 	virtual void Restart();
 public:
-	CGModAudioChannel( DWORD handle, bool online )
-	{
-		this->handle = handle;
-		this->online = online;
-	}
+	CGModAudioChannel( DWORD handle, bool isfile );
 
 private:
 	DWORD handle;
-	bool online;
+	bool isfile;
 };
 
 class CGMod_Audio : public IGMod_Audio
