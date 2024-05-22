@@ -2,3 +2,5 @@
 development/
 *.bak
 Bootil/projects/obj/**
+*.vcxproj**
+gmod-audio.vpc.sentinel

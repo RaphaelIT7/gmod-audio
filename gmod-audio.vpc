@@ -1,0 +1,34 @@
+//-----------------------------------------------------------------------------
+//	DEDICATED.VPC
+//
+//	Project Script
+//-----------------------------------------------------------------------------
+
+$Macro SRCDIR		".."
+$Macro OUTBINDIR	"$SRCDIR\..\game\bin"
+$Macro SDL3SRCDIR	"$SRCDIR\thirdparty\SDL"
+$Macro SDL3OUTDIR	"$SDL3SRCDIR\out\Release"
+
+$Include "$SRCDIR\vpc_scripts\source_dll_base.vpc"
+
+$Project "gmod-audio"
+{
+	$Folder	"Source Files"
+	{
+		$File	"source\cgmod_audio.cpp"
+	}
+
+	$Folder	"Header Files"
+	{
+		$File	"source\cgmod_audio.h"
+		$File	"source\bass.h"
+		$File	"$SRCDIR\public\tier2\tier2.h"
+	}
+
+	$Folder	"Link Libraries"
+	{
+		$Lib 	tier2
+		$DynamicFile	"libs\win\bass_32.lib" [$WIN32]
+		$DynamicFile	"libs\win\bass_64.lib" [$WIN64]
+	}
+}
