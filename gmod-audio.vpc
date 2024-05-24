@@ -28,6 +28,7 @@ $Project "gmod-audio"
 	$Folder	"Link Libraries"
 	{
 		$Lib 	tier2
+		$Lib 	tier3
 		$DynamicFile	"libs\win\bass_32.lib" [$WIN32]
 		$DynamicFile	"libs\win\bass_64.lib" [$WIN64]
 	}
