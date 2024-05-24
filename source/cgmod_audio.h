@@ -42,9 +42,7 @@ public:
 	virtual void GetPos( Vector*, Vector*, Vector* );
 	virtual void SetTime( double, bool );
 	virtual double GetTime();
-#ifdef _WIN32
 	virtual double GetBufferedTime();
-#endif
 	virtual void Set3DFadeDistance( float, float );
 	virtual void Get3DFadeDistance( float*, float* );
 	virtual void Set3DCone( int, int, float );

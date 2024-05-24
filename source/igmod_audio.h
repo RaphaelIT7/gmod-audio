@@ -31,9 +31,7 @@ public:
 	virtual void GetPos( Vector*, Vector*, Vector* ) = 0;
 	virtual void SetTime( double, bool ) = 0;
 	virtual double GetTime() = 0;
-#ifdef _WIN32
 	virtual double GetBufferedTime() = 0;
-#endif
 	virtual void Set3DFadeDistance( float, float ) = 0;
 	virtual void Get3DFadeDistance( float*, float* ) = 0;
 	virtual void Set3DCone( int, int, float ) = 0;

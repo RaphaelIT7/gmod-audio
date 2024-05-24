@@ -482,6 +482,18 @@ double CGModAudioChannel::GetTime()
 	return BASS_ChannelBytes2Seconds(handle, BASS_ChannelGetPosition(handle, BASS_POS_BYTE));
 }
 
+double CGModAudioChannel::GetBufferedTime()
+{
+	if (isfile)
+	{
+		return GetLength();
+	} else {
+		float bufferedTime = 0.0f;
+		BASS_ChannelGetAttribute(handle, BASS_ATTRIB_BUFFER, &bufferedTime);
+		return bufferedTime;
+	}
+}
+
 void CGModAudioChannel::Set3DFadeDistance(float min, float max)
 {
 	BASS_ChannelSet3DAttributes(handle, BASS_3DMODE_NORMAL, min, max, -1, -1, -1);
@@ -648,16 +660,4 @@ bool CGModAudioChannel::Get3DEnabled()
 void CGModAudioChannel::Restart()
 {
 	BASS_ChannelPlay(handle, true);
-}
-
-double CGModAudioChannel::GetBufferedTime()
-{
-	if (isfile)
-	{
-		return GetLength();
-	} else {
-		float bufferedTime = 0.0f;
-		BASS_ChannelGetAttribute(handle, BASS_ATTRIB_BUFFER, &bufferedTime);
-		return bufferedTime;
-	}
 }
