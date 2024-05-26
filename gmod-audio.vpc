@@ -11,7 +11,7 @@ $Macro SDL3OUTDIR	"$SDL3SRCDIR\out\Release"
 
 $Include "$SRCDIR\vpc_scripts\source_dll_base.vpc"
 
-$Project "gmod-audio"
+$Project "gmod_audio"
 {
 	$Folder	"Source Files"
 	{
