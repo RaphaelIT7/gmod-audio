@@ -32,4 +32,9 @@ $Project "gmod_audio"
 		$DynamicFile	"libs\win\bass_32.lib" [$WIN32]
 		$DynamicFile	"libs\win\bass_64.lib" [$WIN64]
 	}
+
+	$Folder "Resource Scripts" [$WINDOWS]
+	{
+		-$File	"$SRCDIR\build\win\resource_scripts\windows_dll_base.rc"
+	}
 }
