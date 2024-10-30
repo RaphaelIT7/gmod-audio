@@ -177,7 +177,7 @@ bool CGMod_Audio::Init(CreateInterfaceFn interfaceFactory)
 							Warning("BASS_Init failed(%i)! Attempt 6.\n", BASS_ErrorGetCode());
 
 							if(!BASS_Init(0, 44100, 0, 0, NULL)) {
-								//Error("Couldn't Init Bass (%i)!", BASS_ErrorGetCode());
+								Warning("Couldn't Init Bass (%i)!", BASS_ErrorGetCode()); // In Gmod this is an Error.
 							}
 						}
 					}
@@ -470,7 +470,7 @@ void CGModAudioChannel::GetPos(Vector* earPosition, Vector* earForward, Vector* 
 
 void CGModAudioChannel::SetTime(double time, bool dont_decode)
 {
-	double pos = BASS_ChannelBytes2Seconds(handle, time);
+	double pos = BASS_ChannelSeconds2Bytes(handle, time);
 	//double currentPos = BASS_ChannelGetPosition(handle, BASS_POS_BYTE);
 
 	DWORD mode = dont_decode ? BASS_POS_DECODE : BASS_POS_BYTE;
