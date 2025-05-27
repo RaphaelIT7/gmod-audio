@@ -4,13 +4,17 @@
 #include <stdlib.h>
 #include <tier2/tier2.h>
 #include <filesystem.h>
+#include "Platform.hpp"
+
+// memdbgon must be the last include file in a .cpp file!!!
+#include "tier0/memdbgon.h"
 
 const char* BassErrorToString(int errorCode) {
-    if (g_BASSErrorStrings[errorCode]) {
-        return g_BASSErrorStrings[errorCode];
-    }
+	if (g_BASSErrorStrings[errorCode]) {
+		return g_BASSErrorStrings[errorCode];
+	}
 
-    return "unknown error";
+	return "unknown error";
 }
 
 /*
@@ -142,6 +146,7 @@ HSTREAM CBassAudioStream::GetHandle()
 */
 
 CGMod_Audio g_CGMod_Audio;
+IGMod_Audio* g_pGModAudio = &g_CGMod_Audio;
 
 CGMod_Audio::~CGMod_Audio()
 {
@@ -155,25 +160,30 @@ bool CGMod_Audio::Init(CreateInterfaceFn interfaceFactory)
 
 	BASS_SetConfig(BASS_CONFIG_UPDATEPERIOD, 10);
 
-	if(!BASS_Init(-1, 48000, 0, 0, NULL)) {
+#ifdef DEDICATED
+	if (!BASS_Init(0, 44100, 0, 0, NULL)) {
+		Warning(PROJECT_NAME ": Couldn't Init Bass (%i)!", BASS_ErrorGetCode());
+	}
+#else
+	if(!BASS_Init(-1, 44100, 0, 0, NULL)) {
 		Warning("BASS_Init failed(%i)! Attempt 1.\n", BASS_ErrorGetCode());
 
-		if(!BASS_Init(1, 48000, BASS_DEVICE_DEFAULT, 0, NULL)) {
+		if(!BASS_Init(1, 44100, BASS_DEVICE_DEFAULT, 0, NULL)) {
 			Warning("BASS_Init failed(%i)! Attempt 2.\n", BASS_ErrorGetCode());
 
-			if(!BASS_Init(-1, 48000, BASS_DEVICE_3D | BASS_DEVICE_DEFAULT, 0, NULL)) {
+			if(!BASS_Init(-1, 44100, BASS_DEVICE_3D | BASS_DEVICE_DEFAULT, 0, NULL)) {
 				Warning("BASS_Init failed(%i)! Attempt 3.\n", BASS_ErrorGetCode());
 
-				if(!BASS_Init(1, 48000, BASS_DEVICE_3D | BASS_DEVICE_DEFAULT, 0, NULL)) {
+				if(!BASS_Init(1, 44100, BASS_DEVICE_3D | BASS_DEVICE_DEFAULT, 0, NULL)) {
 					Warning("BASS_Init failed(%i)! Attempt 4.\n", BASS_ErrorGetCode());
 
-					if(!BASS_Init(-1 , 48000, 0, 0, NULL)) {
+					if(!BASS_Init(-1 , 44100, 0, 0, NULL)) {
 						Warning("BASS_Init failed(%i)! Attempt 5.\n", BASS_ErrorGetCode());
 
-						if(!BASS_Init(1, 48000, 0, 0, NULL)) {
+						if(!BASS_Init(1, 44100, 0, 0, NULL)) {
 							Warning("BASS_Init failed(%i)! Attempt 6.\n", BASS_ErrorGetCode());
 
-							if(!BASS_Init(0, 48000, 0, 0, NULL)) {
+							if(!BASS_Init(0, 44100, 0, 0, NULL)) {
 								Warning("Couldn't Init Bass (%i)!", BASS_ErrorGetCode()); // In Gmod this is an Error.
 							}
 						}
@@ -182,12 +192,13 @@ bool CGMod_Audio::Init(CreateInterfaceFn interfaceFactory)
 			}
 		}
 	}
+#endif
 
 	BASS_SetConfig(BASS_CONFIG_BUFFER, 50); // Gmod probably has a different value.
 	BASS_SetConfig(BASS_CONFIG_NET_BUFFER, 1048576);
 	BASS_SetConfig(BASS_CONFIG_UPDATETHREADS, 0);
 	BASS_SetConfig(BASS_CONFIG_SRC, 2);
-	BASS_Set3DFactors(0.0680416, 7.0, 5.2);
+	BASS_Set3DFactors(0.0680416f, 7.0f, 5.2f);
 
 	return 1;
 }
@@ -269,7 +280,7 @@ void CGMod_Audio::SetEar(Vector* earPosition, Vector* earVelocity, Vector* earFr
 	g_pLocalEarPosition = *earPosition;
 
 	BASS_Set3DPosition(&earPos, &earVel, &earFr, &earT);
-	BASS_Set3DFactors(0.0680416, 7.0, 5.2);
+	BASS_Set3DFactors(0.0680416f, 7.0f, 5.2f);
 
 	BASS_Apply3D();
 }
@@ -370,20 +381,29 @@ CGModAudioChannel::CGModAudioChannel( DWORD handle, bool isfile )
 {
 	BASS_ChannelSet3DAttributes(handle, BASS_3DMODE_NORMAL, 200, 1000000000, 360, 360, 0);
 	BASS_Apply3D();
-	this->handle = handle;
-	this->isfile = isfile;
+	this->m_pHandle = handle;
+	this->m_bIsFile = isfile;
 }
 
+CGModAudioChannel::~CGModAudioChannel()
+{
+
+}
+
+#define OLD_BASS 1
 void CGModAudioChannel::Destroy()
 {
- 	if (BASS_ChannelIsActive(handle) == 1) {
-		BASS_ChannelFree(handle);
-	} else {
-		int streamFlags = BASS_ChannelFlags(handle, 0, 0);
+#ifndef OLD_BASS
+ 	if (BASS_ChannelIsActive(m_pHandle) == 1) {
+		BASS_ChannelFree(m_pHandle);
+	} else 
+#endif
+	{
+		int streamFlags = BASS_ChannelFlags(m_pHandle, 0, 0);
 		if (!(streamFlags & BASS_STREAM_DECODE)) {
-			BASS_StreamFree(handle);
+			BASS_StreamFree(m_pHandle);
 		} else {
-			BASS_MusicFree(handle);
+			BASS_MusicFree(m_pHandle);
 		}
 	}
 
@@ -392,41 +412,41 @@ void CGModAudioChannel::Destroy()
 
 void CGModAudioChannel::Stop()
 {
-	BASS_ChannelStop(handle);
+	BASS_ChannelStop(m_pHandle);
 }
 
 void CGModAudioChannel::Pause()
 {
-	BASS_ChannelPause(handle);
+	BASS_ChannelPause(m_pHandle);
 }
 
 void CGModAudioChannel::Play()
 {
-	BASS_ChannelPlay(handle, false);
+	BASS_ChannelPlay(m_pHandle, false);
 }
 
 void CGModAudioChannel::SetVolume(float volume)
 {
-	BASS_ChannelSetAttribute(handle, BASS_ATTRIB_VOL, volume);
+	BASS_ChannelSetAttribute(m_pHandle, BASS_ATTRIB_VOL, volume);
 }
 
 float CGModAudioChannel::GetVolume()
 {
 	float volume = 0.0f;
-	BASS_ChannelGetAttribute(handle, BASS_ATTRIB_VOL, &volume);
+	BASS_ChannelGetAttribute(m_pHandle, BASS_ATTRIB_VOL, &volume);
 
 	return volume;
 }
 
 void CGModAudioChannel::SetPlaybackRate(float speed)
 {
-	BASS_ChannelSetAttribute(handle, BASS_ATTRIB_FREQ, speed);
+	BASS_ChannelSetAttribute(m_pHandle, BASS_ATTRIB_FREQ, speed);
 }
 
 float CGModAudioChannel::GetPlaybackRate()
 {
 	float currentPlaybackRate = 0;
-	BASS_ChannelGetAttribute(handle, BASS_ATTRIB_FREQ, &currentPlaybackRate);
+	BASS_ChannelGetAttribute(m_pHandle, BASS_ATTRIB_FREQ, &currentPlaybackRate);
 
 	return currentPlaybackRate;
 }
@@ -455,10 +475,10 @@ void CGModAudioChannel::SetPos(Vector* earPosition, Vector* earForward, Vector* 
 	}
 
 	if ((g_pLocalEarPosition - *earPosition).LengthSqr() < 1.0) {
-	//	BASS_ChannelFlags(handle, BASS_SAMPLE_3D, 0);
+	//	BASS_ChannelFlags(m_pHandle, BASS_SAMPLE_3D, 0);
 	}
 
-	BASS_ChannelSet3DPosition(handle, &earPos, earForward ? &earDir : NULL, earUp ? &earUpVec : NULL);
+	BASS_ChannelSet3DPosition(m_pHandle, &earPos, earForward ? &earDir : NULL, earUp ? &earUpVec : NULL);
 	BASS_Apply3D();
 }
 
@@ -474,7 +494,7 @@ void CGModAudioChannel::GetPos(Vector* earPosition, Vector* earForward, Vector* 
 	}
 
 	BASS_3DVECTOR earPos, earDir, earUpVec;
-	BASS_ChannelGet3DPosition(handle, &earPos, &earDir, &earUpVec);
+	BASS_ChannelGet3DPosition(m_pHandle, &earPos, &earDir, &earUpVec);
 
 	earPosition->x = earPos.x;
 	earPosition->y = earPos.y;
@@ -491,106 +511,106 @@ void CGModAudioChannel::GetPos(Vector* earPosition, Vector* earForward, Vector* 
 
 void CGModAudioChannel::SetTime(double time, bool dont_decode)
 {
-	double pos = BASS_ChannelSeconds2Bytes(handle, time);
+	QWORD pos = BASS_ChannelSeconds2Bytes(m_pHandle, time);
 	//double currentPos = BASS_ChannelGetPosition(handle, BASS_POS_BYTE);
 
 	DWORD mode = dont_decode ? BASS_POS_DECODE : BASS_POS_BYTE;
-	BASS_ChannelSetPosition(handle, pos, mode);
+	BASS_ChannelSetPosition(m_pHandle, pos, mode);
 }
 
 double CGModAudioChannel::GetTime()
 {
-	return BASS_ChannelBytes2Seconds(handle, BASS_ChannelGetPosition(handle, BASS_POS_BYTE));
+	return BASS_ChannelBytes2Seconds(m_pHandle, BASS_ChannelGetPosition(m_pHandle, BASS_POS_BYTE));
 }
 
 double CGModAudioChannel::GetBufferedTime()
 {
-	if (isfile)
+	if (m_bIsFile)
 	{
 		return GetLength();
 	} else {
 		float bufferedTime = 0.0f;
-		BASS_ChannelGetAttribute(handle, BASS_ATTRIB_BUFFER, &bufferedTime);
+		BASS_ChannelGetAttribute(m_pHandle, BASS_ATTRIB_BUFFER, &bufferedTime);
 		return bufferedTime;
 	}
 }
 
 void CGModAudioChannel::Set3DFadeDistance(float min, float max)
 {
-	BASS_ChannelSet3DAttributes(handle, BASS_3DMODE_NORMAL, min, max, -1, -1, -1);
+	BASS_ChannelSet3DAttributes(m_pHandle, BASS_3DMODE_NORMAL, min, max, -1, -1, -1);
 	BASS_Apply3D();
 }
 
 void CGModAudioChannel::Get3DFadeDistance(float* min, float* max)
 {
-	BASS_ChannelGet3DAttributes(handle, BASS_3DMODE_NORMAL, min, max, 0, 0, 0);
+	BASS_ChannelGet3DAttributes(m_pHandle, BASS_3DMODE_NORMAL, min, max, 0, 0, 0);
 }
 
 void CGModAudioChannel::Set3DCone(int innerAngle, int outerAngle, float outerVolume)
 {
-	BASS_ChannelSet3DAttributes(handle, BASS_3DMODE_NORMAL, -1, -1, innerAngle, outerAngle, outerVolume);
+	BASS_ChannelSet3DAttributes(m_pHandle, BASS_3DMODE_NORMAL, -1, -1, innerAngle, outerAngle, outerVolume);
 	BASS_Apply3D();
 }
 
 void CGModAudioChannel::Get3DCone(int* innerAngle, int* outerAngle, float* outerVolume)
 {
-	BASS_ChannelGet3DAttributes(handle, BASS_3DMODE_NORMAL, 0, 0, (DWORD*)innerAngle, (DWORD*)outerAngle, outerVolume);
+	BASS_ChannelGet3DAttributes(m_pHandle, BASS_3DMODE_NORMAL, 0, 0, (DWORD*)innerAngle, (DWORD*)outerAngle, outerVolume);
 }
 
 int CGModAudioChannel::GetState()
 {
-	return BASS_ChannelIsActive(handle);
+	return BASS_ChannelIsActive(m_pHandle);
 }
 
 void CGModAudioChannel::SetLooping(bool looping)
 {
-	BASS_ChannelFlags(handle, BASS_SAMPLE_LOOP, looping ? BASS_SAMPLE_LOOP : 0);
+	BASS_ChannelFlags(m_pHandle, BASS_SAMPLE_LOOP, looping ? BASS_SAMPLE_LOOP : 0);
 }
 
 bool CGModAudioChannel::IsLooping()
 {
-	DWORD flags = BASS_ChannelFlags(handle, 0, 0);
+	DWORD flags = BASS_ChannelFlags(m_pHandle, 0, 0);
 
 	return (flags & BASS_SAMPLE_LOOP) != 0;
 }
 
 bool CGModAudioChannel::IsOnline()
 {
-	return !isfile;
+	return !m_bIsFile;
 }
 
 bool CGModAudioChannel::Is3D()
 {
-	DWORD flags = BASS_ChannelFlags(handle, 0, 0);
+	DWORD flags = BASS_ChannelFlags(m_pHandle, 0, 0);
 
 	return (flags & BASS_SAMPLE_3D) != 0;
 }
 
 bool CGModAudioChannel::IsBlockStreamed()
 {
-	DWORD flags = BASS_ChannelFlags(handle, 0, 0);
+	DWORD flags = BASS_ChannelFlags(m_pHandle, 0, 0);
 
 	return (flags & BASS_STREAM_BLOCK) != 0;
 }
 
 bool CGModAudioChannel::IsValid()
 {
-	return handle != 0;
+	return m_pHandle != 0;
 }
 
 double CGModAudioChannel::GetLength()
 {
-	return BASS_ChannelBytes2Seconds(handle, BASS_ChannelGetLength(handle, BASS_POS_BYTE));
+	return BASS_ChannelBytes2Seconds(m_pHandle, BASS_ChannelGetLength(m_pHandle, BASS_POS_BYTE));
 }
 
 const char* CGModAudioChannel::GetFileName()
 {
 	static char fileName[MAX_PATH];
 	BASS_CHANNELINFO info;
-	if (BASS_ChannelGetInfo(handle, &info)) {
-		strcpy(fileName, info.filename);
+	if (BASS_ChannelGetInfo(m_pHandle, &info)) {
+		strncpy(fileName, info.filename, sizeof(fileName));
 	} else {
-		strcpy(fileName, "NULL");
+		strncpy(fileName, "NULL", sizeof(fileName));
 	}
 
 	return fileName;
@@ -599,7 +619,7 @@ const char* CGModAudioChannel::GetFileName()
 int CGModAudioChannel::GetSamplingRate()
 {
 	BASS_CHANNELINFO info;
-	if (!BASS_ChannelGetInfo(handle, &info)) {
+	if (!BASS_ChannelGetInfo(m_pHandle, &info)) {
 		return 0;
 	}
 
@@ -609,7 +629,7 @@ int CGModAudioChannel::GetSamplingRate()
 int CGModAudioChannel::GetBitsPerSample()
 {
 	BASS_CHANNELINFO info;
-	if (!BASS_ChannelGetInfo(handle, &info)) {
+	if (!BASS_ChannelGetInfo(m_pHandle, &info)) {
 		return 0;
 	}
 
@@ -619,15 +639,15 @@ int CGModAudioChannel::GetBitsPerSample()
 float CGModAudioChannel::GetAverageBitRate()
 {
 	float averageBitRate = 0.0f;
-	BASS_ChannelGetAttribute(handle, BASS_ATTRIB_BITRATE, &averageBitRate);
+	BASS_ChannelGetAttribute(m_pHandle, BASS_ATTRIB_BITRATE, &averageBitRate);
 
 	return averageBitRate;
 }
 
 void CGModAudioChannel::GetLevel(float* leftLevel, float* rightLevel)
 {
-	if (BASS_ChannelIsActive(handle) == BASS_ACTIVE_PLAYING) {
-		DWORD levels = BASS_ChannelGetLevel(handle);
+	if (BASS_ChannelIsActive(m_pHandle) == BASS_ACTIVE_PLAYING) {
+		DWORD levels = BASS_ChannelGetLevel(m_pHandle);
 		
 		*leftLevel = LOWORD(levels) / 32768.0f;
 		*rightLevel = HIWORD(levels) / 32768.0f;
@@ -639,46 +659,46 @@ void CGModAudioChannel::GetLevel(float* leftLevel, float* rightLevel)
 
 void CGModAudioChannel::FFT(float *data, GModChannelFFT_t channelFFT)
 {
-	if (BASS_ChannelIsActive(handle) == BASS_ACTIVE_PLAYING) {
-		BASS_ChannelGetData(handle, data, 2147483648 + channelFFT);
+	if (BASS_ChannelIsActive(m_pHandle) == BASS_ACTIVE_PLAYING) {
+		BASS_ChannelGetData(m_pHandle, data, BASS_DATA_FFT256 << channelFFT);
 	} else {
-		memset(data, 0, sizeof(float) * channelFFT);
+		memset(data, 0, sizeof(float) * (1 << (8 + (int)channelFFT)));
 	}
 }
 
 void CGModAudioChannel::SetChannelPan(float pan)
 {
-	BASS_ChannelSetAttribute(handle, BASS_ATTRIB_PAN, pan);
+	BASS_ChannelSetAttribute(m_pHandle, BASS_ATTRIB_PAN, pan);
 }
 
 float CGModAudioChannel::GetChannelPan()
 {
 	float result = 0.0f;
-	BASS_ChannelGetAttribute(handle, BASS_ATTRIB_PAN, &result);
+	BASS_ChannelGetAttribute(m_pHandle, BASS_ATTRIB_PAN, &result);
 
 	return result;
 }
 
 const char* CGModAudioChannel::GetTags(int format)
 {
-	return BASS_ChannelGetTags(handle, format);
+	return BASS_ChannelGetTags(m_pHandle, format);
 }
 
 void CGModAudioChannel::Set3DEnabled(bool enabled)
 {
-	BASS_ChannelSet3DAttributes(handle, enabled ? BASS_3DMODE_NORMAL : BASS_3DMODE_OFF, -1, -1, -1, -1, 1);
+	BASS_ChannelSet3DAttributes(m_pHandle, enabled ? BASS_3DMODE_NORMAL : BASS_3DMODE_OFF, -1, -1, -1, -1, 1);
 	BASS_Apply3D();
 }
 
 bool CGModAudioChannel::Get3DEnabled()
 {
 	DWORD mode;
-	BASS_ChannelGet3DAttributes(handle, &mode, 0, 0, 0, 0, 0);
+	BASS_ChannelGet3DAttributes(m_pHandle, &mode, 0, 0, 0, 0, 0);
 
 	return mode != BASS_3DMODE_OFF;
 }
 
 void CGModAudioChannel::Restart()
 {
-	BASS_ChannelPlay(handle, true);
+	BASS_ChannelPlay(m_pHandle, true);
 }
