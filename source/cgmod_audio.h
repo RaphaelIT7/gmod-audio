@@ -14,14 +14,14 @@ public:
 	virtual uint GetPosition();
 	virtual void SetPosition( uint distance );
 	virtual HSTREAM GetHandle();
-	virtual void CALLBACK MyFileCloseProc( void* );
-	virtual QWORD CALLBACK MyFileLenProc( void* );
-	virtual DWORD CALLBACK MyFileReadProc( void*, uint, void* );
-	virtual BOOL CALLBACK MyFileSeekProc( unsigned long long, void* );
+	static void CALLBACK FileClose( void* );
+	static QWORD CALLBACK FileLength( void* );
+	static DWORD CALLBACK FileRead( void*, DWORD, void* );
+	static BOOL CALLBACK FileSeek( unsigned long long, void* );
 
 public:
 	CBassAudioStream();
-	void Init( IAudioStreamEvent* );
+	bool Init( IAudioStreamEvent* );
 
 private:
 	HSTREAM m_hStream;

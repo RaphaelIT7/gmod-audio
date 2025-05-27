@@ -24,61 +24,58 @@ CBassAudioStream::CBassAudioStream()
 CBassAudioStream::~CBassAudioStream()
 {
 	// IDK
+	if (m_hStream)
+		BASS_StreamFree(m_hStream);
 }
 
-void CALLBACK MyFileCloseProcc(void *user)
+bool CBassAudioStream::Init(IAudioStreamEvent* event)
 {
-	fclose((FILE*)user);
-}
-
-QWORD CALLBACK MyFileLenProcc(void *user)
-{
-	struct stat finfo;
-	fstat(fileno((FILE*)user), &finfo); // Crash: It crashes here because we fucked up in CBassAudioStream::Init
-	return finfo.st_size;
-}
-
-DWORD CALLBACK MyFileReadProcc(void *buffer, DWORD length, void *user)
-{
-	return fread(buffer, 1, length, (FILE*)user);
-}
-
-BOOL CALLBACK MyFileSeekProcc(QWORD offset, void* user)
-{
-	return !fseek((FILE*)user, offset, SEEK_SET);
-}
-
-void CBassAudioStream::Init(IAudioStreamEvent* event)
-{
-	BASS_FILEPROCS fileprocs={MyFileCloseProcc, MyFileLenProcc, MyFileReadProcc, MyFileSeekProcc};
+	BASS_FILEPROCS fileprocs={CBassAudioStream::FileClose, CBassAudioStream::FileLength, CBassAudioStream::FileRead, CBassAudioStream::FileSeek};
 
 	m_hStream = BASS_StreamCreateFileUser(STREAMFILE_NOBUFFER, BASS_STREAM_AUTOFREE, &fileprocs, event); // ToDo: FIX THIS. event should be a FILE* not a IAudioStreamEvent* -> Crash
 
 	if (m_hStream == 0) {
 		Warning("Couldn't create BASS audio stream (%s)", BassErrorToString(BASS_ErrorGetCode()));
+		return false;
+	}
+
+	return true;
+}
+
+void CALLBACK CBassAudioStream::FileClose(void* user)
+{
+	FileHandle_t file = reinterpret_cast<FileHandle_t>(user);
+	if (file && g_pFullFileSystem) {
+		g_pFullFileSystem->Close(file);
 	}
 }
 
-void CALLBACK CBassAudioStream::MyFileCloseProc(void* user)
+QWORD CALLBACK CBassAudioStream::FileLength(void* user)
 {
-	fclose((FILE*)user);
+	FileHandle_t file = reinterpret_cast<FileHandle_t>(user);
+	if (!file || !g_pFullFileSystem)
+		return 0;
+
+	return static_cast<QWORD>(g_pFullFileSystem->Size(file));
 }
 
-QWORD CALLBACK CBassAudioStream::MyFileLenProc(void* user)
+DWORD CALLBACK CBassAudioStream::FileRead(void *buffer, DWORD length, void* user)
 {
-	struct stat finfo;
-	fstat(fileno((FILE*)user), &finfo);
-	return finfo.st_size;
+	FileHandle_t file = reinterpret_cast<FileHandle_t>(user);
+	if (!file || !g_pFullFileSystem)
+		return 0;
+
+	return g_pFullFileSystem->Read(buffer, length, file);
 }
 
-DWORD CALLBACK CBassAudioStream::MyFileReadProc(void *buffer, unsigned int length, void* user)
+BOOL CALLBACK CBassAudioStream::FileSeek(QWORD offset, void* user)
 {
-	return fread(buffer, 1, length, (FILE*)user);
-}
+	FileHandle_t file = reinterpret_cast<FileHandle_t>(user);
+	if (!file || !g_pFullFileSystem)
+		return false;
 
-BOOL CALLBACK CBassAudioStream::MyFileSeekProc(QWORD offset, void* user)
-{
-	return !fseek((FILE*)user, offset, SEEK_SET);
+	g_pFullFileSystem->Seek(file, offset, FILESYSTEM_SEEK_HEAD);
+	return true;
 }
 
 unsigned int CBassAudioStream::Decode(void* data, unsigned int size)
@@ -156,27 +153,27 @@ bool CGMod_Audio::Init(CreateInterfaceFn interfaceFactory)
 	ConnectTier1Libraries( &interfaceFactory, 1 );
 	ConnectTier2Libraries( &interfaceFactory, 1 );
 
-	BASS_SetConfig(BASS_CONFIG_UPDATEPERIOD, 36);
+	BASS_SetConfig(BASS_CONFIG_UPDATEPERIOD, 10);
 
-	if(!BASS_Init(-1, 44100, 0, 0, NULL)) {
+	if(!BASS_Init(-1, 48000, 0, 0, NULL)) {
 		Warning("BASS_Init failed(%i)! Attempt 1.\n", BASS_ErrorGetCode());
 
-		if(!BASS_Init(1, 44100, BASS_DEVICE_DEFAULT, 0, NULL)) {
+		if(!BASS_Init(1, 48000, BASS_DEVICE_DEFAULT, 0, NULL)) {
 			Warning("BASS_Init failed(%i)! Attempt 2.\n", BASS_ErrorGetCode());
 
-			if(!BASS_Init(-1, 44100, BASS_DEVICE_3D | BASS_DEVICE_DEFAULT, 0, NULL)) {
+			if(!BASS_Init(-1, 48000, BASS_DEVICE_3D | BASS_DEVICE_DEFAULT, 0, NULL)) {
 				Warning("BASS_Init failed(%i)! Attempt 3.\n", BASS_ErrorGetCode());
 
-				if(!BASS_Init(1, 44100, BASS_DEVICE_3D | BASS_DEVICE_DEFAULT, 0, NULL)) {
+				if(!BASS_Init(1, 48000, BASS_DEVICE_3D | BASS_DEVICE_DEFAULT, 0, NULL)) {
 					Warning("BASS_Init failed(%i)! Attempt 4.\n", BASS_ErrorGetCode());
 
-					if(!BASS_Init(-1 , 44100, 0, 0, NULL)) {
+					if(!BASS_Init(-1 , 48000, 0, 0, NULL)) {
 						Warning("BASS_Init failed(%i)! Attempt 5.\n", BASS_ErrorGetCode());
 
-						if(!BASS_Init(1, 44100, 0, 0, NULL)) {
+						if(!BASS_Init(1, 48000, 0, 0, NULL)) {
 							Warning("BASS_Init failed(%i)! Attempt 6.\n", BASS_ErrorGetCode());
 
-							if(!BASS_Init(0, 44100, 0, 0, NULL)) {
+							if(!BASS_Init(0, 48000, 0, 0, NULL)) {
 								Warning("Couldn't Init Bass (%i)!", BASS_ErrorGetCode()); // In Gmod this is an Error.
 							}
 						}
@@ -186,9 +183,10 @@ bool CGMod_Audio::Init(CreateInterfaceFn interfaceFactory)
 		}
 	}
 
-	BASS_SetConfig(BASS_CONFIG_BUFFER, 36);
+	BASS_SetConfig(BASS_CONFIG_BUFFER, 50); // Gmod probably has a different value.
 	BASS_SetConfig(BASS_CONFIG_NET_BUFFER, 1048576);
 	BASS_SetConfig(BASS_CONFIG_UPDATETHREADS, 0);
+	BASS_SetConfig(BASS_CONFIG_SRC, 2);
 	BASS_Set3DFactors(0.0680416, 7.0, 5.2);
 
 	return 1;
@@ -212,8 +210,15 @@ void CGMod_Audio::Shutdown()
 
 IBassAudioStream* CGMod_Audio::CreateAudioStream(IAudioStreamEvent* event)
 {
+	if (true)
+		return NULL;
+
 	CBassAudioStream* pBassStream = new CBassAudioStream();
-	pBassStream->Init(event);
+	if (!pBassStream->Init(event))
+	{
+		delete pBassStream;
+		return NULL;
+	}
 
 	return (IBassAudioStream*)pBassStream;
 }
@@ -238,6 +243,7 @@ void CGMod_Audio::Update(unsigned int updatePeriod)
 	BASS_Update(updatePeriod);
 }
 
+static Vector g_pLocalEarPosition;
 void CGMod_Audio::SetEar(Vector* earPosition, Vector* earVelocity, Vector* earFront, Vector* earTop)
 {
 	BASS_3DVECTOR earPos;
@@ -260,6 +266,8 @@ void CGMod_Audio::SetEar(Vector* earPosition, Vector* earVelocity, Vector* earFr
 	earT.y = earTop->y;
 	earT.z = -earTop->z;
 
+	g_pLocalEarPosition = *earPosition;
+
 	BASS_Set3DPosition(&earPos, &earVel, &earFr, &earT);
 	BASS_Set3DFactors(0.0680416, 7.0, 5.2);
 
@@ -268,7 +276,7 @@ void CGMod_Audio::SetEar(Vector* earPosition, Vector* earVelocity, Vector* earFr
 
 DWORD BASSFlagsFromString(const std::string& flagsString, bool* autoplay) // autoplay arg doesn't exist in gmod.
 {
-	DWORD flags = 0;
+	DWORD flags = BASS_SAMPLE_FLOAT;
 	if (flagsString.empty())
 	{
 		flags |= BASS_STREAM_BLOCK;
@@ -277,7 +285,7 @@ DWORD BASSFlagsFromString(const std::string& flagsString, bool* autoplay) // aut
 
 	if (flagsString.find("3d") != std::string::npos)
 	{
-		flags |= BASS_SAMPLE_3D;
+		flags |= BASS_SAMPLE_3D | BASS_SAMPLE_MONO;
 	}
 
 	if (flagsString.find("mono") != std::string::npos)
@@ -287,7 +295,7 @@ DWORD BASSFlagsFromString(const std::string& flagsString, bool* autoplay) // aut
 
 	if (flagsString.find("noplay") != std::string::npos)
 	{
-		autoplay = false;
+		*autoplay = false;
 	}
 
 	if (flagsString.find("noblock") == std::string::npos)
@@ -446,12 +454,25 @@ void CGModAudioChannel::SetPos(Vector* earPosition, Vector* earForward, Vector* 
 		earUpVec.z = earUp->z;
 	}
 
+	if ((g_pLocalEarPosition - *earPosition).LengthSqr() < 1.0) {
+	//	BASS_ChannelFlags(handle, BASS_SAMPLE_3D, 0);
+	}
+
 	BASS_ChannelSet3DPosition(handle, &earPos, earForward ? &earDir : NULL, earUp ? &earUpVec : NULL);
 	BASS_Apply3D();
 }
 
+static Vector vector_origin(0, 0, 0);
 void CGModAudioChannel::GetPos(Vector* earPosition, Vector* earForward, Vector* earUp)
 {
+	if (!Is3D())
+	{
+		*earPosition = vector_origin;
+		*earForward = vector_origin;
+		*earUp = vector_origin;
+		return;
+	}
+
 	BASS_3DVECTOR earPos, earDir, earUpVec;
 	BASS_ChannelGet3DPosition(handle, &earPos, &earDir, &earUpVec);
 
