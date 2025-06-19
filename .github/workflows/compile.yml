@@ -13,7 +13,7 @@ jobs:
     uses: RaphaelIT7/gmod-common-module-base/.github/workflows/compile.yml@workflow
     with:
       PROJECT_NAME: "gmod_audio"
-      BUILD_64x: "false"
+      BUILD_64x: "true"
       LINUX_FILEEXTENTION: "so"
       BUILD_WINDOWS: "true"
       BUILD_LINUX: "false"
