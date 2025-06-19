@@ -347,7 +347,7 @@ IGModAudioChannel* CGMod_Audio::PlayURL(const char* url, const char* flags, int*
 IGModAudioChannel* CGMod_Audio::PlayFile(const char* filePath, const char* flags, int* errorCode)
 {
 	*errorCode = 0;
-	if (filePath == nullptr || flags == nullptr) {
+	if (filePath == nullptr || flags == nullptr || !g_pFullFileSystem) {
 		*errorCode = -1;
 		return NULL;
 	}
